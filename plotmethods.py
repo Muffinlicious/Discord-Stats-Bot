@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 def timebar(dtlist):
   bardata = {t:0 for t in range(24)}
   for dt in dtlist:
+    dt = dt - timedelta(hours=7)
     bardata[dt.hour] += 1
   y_pos = numpy.arange(len(bardata))
   plt.bar(y_pos, list(bardata.values()), align='center', alpha=0.5)
