@@ -1,7 +1,7 @@
 #!/Library/Frameworks/Python.framework/Versions/3.7/bin/python3.7
 import discord
 import asyncio
-from statstuff import *
+from dcstats import *
 
 client = discord.Client()
 users = dict()
