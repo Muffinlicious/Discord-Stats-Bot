@@ -2,7 +2,7 @@
 import discord
 import asyncio
 import dill
-from statstuff import *
+from dcstats import *
 
 client = discord.Client()
 userlist = list()
