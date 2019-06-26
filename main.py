@@ -1,12 +1,15 @@
 #!/Library/Frameworks/Python.framework/Versions/3.7/bin/python3.7
 import discord
 import asyncio
-from dcstats import *
+import dill
+from statstuff import *
 
 client = discord.Client()
-users = dict()
+userlist = list()
+channel = ''
 @client.event
 async def on_ready():
+  global userlist, channel, guild
   # Connection Initialization
   await client.wait_until_ready()
   print('Logged in as %s' % client.user.name)
@@ -25,11 +28,24 @@ async def on_ready():
   limit = int(input('Message limit?'))
   
   # Message Collection (ignores bot messages)
+  n = 0
   async for message in channel.history(limit=limit).filter(lambda msg: not msg.author.bot):
-    if message.author:
-      pass
-  
-    
+    #REMINDER: Discriminators are strings, no hashtag
+    for user in userlist:
+      if user.id == message.author.id:
+        user.feed(message)
+        break
+    else: #for-else construct is intentional
+      user = UserStatistics(message.author)
+      user.feed(message)
+      userlist.append(user)
+    #Keep track of how many messages have been scraped 
+    if (n % 100 == 0):
+      print(n)
+    n += 1
+    # Store UserStatistics object list in pickle file
+    with open(f'{guild}:{channel}:userstats.pkl', 'wb') as f:
+      dill.dump(userlist, f, dill.HIGHEST_PROTOCOL)
 @client.event
 async def on_message(message):
   if message.content.startswith('!hug'):
