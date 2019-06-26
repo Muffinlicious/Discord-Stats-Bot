@@ -98,6 +98,7 @@ class UserStatistics(_MsgStatistics):
     return self.name
   '''
   ### Benched code for if using the user object is necessary 
+  ### Deletes the user object when uploaded as a pickle
   def __getstate__(self): # object isn't pickleable with user object attribute
     state = self.__dict__.copy()
     del state["user"]
