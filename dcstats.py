@@ -78,11 +78,12 @@ class _MsgStatistics:
     # Times
     self.hourslots[(message.created_at - timedelta(hours=7)).hour] += 1 # -7 is PST
   
-  def hourgraph(self, fname='bar.png', show=0):
+  def hourgraph(self, fname='bar.png', label='Messages', show=0):
+    plt.clf()
     y_pos = numpy.arange(len(self.hourslots))
     plt.bar(y_pos, list(self.hourslots.values()), align='center', alpha=0.5)
     plt.xticks(y_pos, list(self.hourslots))
-    plt.ylabel('Messages')
+    plt.ylabel(label)
     plt.title('Messages per Daytime Hour (PST)')
     if show:
       plt.show()
@@ -96,9 +97,10 @@ class UserStatistics(_MsgStatistics):
     _MsgStatistics.__init__(self)
   def __repr__(self):
     return self.name
+  def hourgraph(self, show=0):
+    _MsgStatistics.hourgraph(self, f'{self.name}bar.png', f'{self.name}\'s Messages', show)
   '''
   ### Benched code for if using the user object is necessary 
-  ### Deletes the user object when pickled
   def __getstate__(self): # object isn't pickleable with user object attribute
     state = self.__dict__.copy()
     del state["user"]
