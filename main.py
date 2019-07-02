@@ -4,8 +4,10 @@ import asyncio
 import dill
 import logging
 import os
+import time
 from datetime import timedelta
-from statstuff import *
+from dcstats import UserStatistics
+from kymcommands import get_random_image
 
 client = discord.Client()
 
@@ -98,6 +100,10 @@ Last: ID: {batchinfo['last']['id']} / DATETIME: {batchinfo['last']['dt']}''')
 
 @client.event
 async def on_message(message):
+  if message.content.startswith('!kymrandom'):
+    await message.channel.trigger_typing()
+    url = get_random_image()
+    await message.channel.send(url)
   if message.content.startswith('!hug'):
     if message.mentions:
       await message.channel.send(message.mentions[0].mention + '<:cathug:443111261899718658>')
@@ -105,7 +111,7 @@ async def on_message(message):
       await message.channel.send('<:cathug:443111261899718658>')
   if message.content.startswith('!quit'):
     if message.author.id == MUFFIN_ID:
-      await client.close()
+      await client.logout()
   if message.content.startswith('!ayy'):
     await message.channel.send('lmao')
 client.run('token')
