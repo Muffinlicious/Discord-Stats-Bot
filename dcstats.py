@@ -1,6 +1,6 @@
 from datetime import timedelta
 from emoji import emoji_lis, demojize
-from re import findall
+import re
 import matplotlib.pyplot as plt
 import numpy
 
@@ -27,7 +27,7 @@ def getemojis(string):
   emojis = list()
   for d in emoji_lis(string):
     emojis.append(demojize(d['emoji']))
-  for e in findall(RE_CUSTOM_EMOJI, string):
+  for e in re.findall(RE_CUSTOM_EMOJI, string):
     emojis.append(e)
   return emojis
 
