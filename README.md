@@ -1,5 +1,5 @@
 # Discord-Stats-Bot
-Scrapes messages from discord channels and makes graphs
+Scrapes messages from discord channels and gives statistics and makes graphs
 
 Python 3.7
 
