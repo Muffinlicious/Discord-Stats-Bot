@@ -26,4 +26,4 @@ async def quit(ctx):
   await bot.logout()
 
 if __name__ == '__main__':
-  bot.run('NDAzNzQ1MzIyMDA3OTIwNjQz.Dqr8dQ.TKJ-IjdXVuACe2OdElvO3aPmzxY', reconnect=False)
+  bot.run('token', reconnect=False)
