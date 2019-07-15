@@ -1,6 +1,6 @@
 _ID_LIST = {'Server' :
             (({'name':'Server', 'id':int()}), ({'name':'channel', 'id':int()})),
-           ### Dictionary is set up in this format
+           ### ^ Dictionary is set up in this format, actual servers omitted for privacy purposes
            }
 
 _SERVER = 'Server'
