@@ -1,36 +1,40 @@
-from datetime import timedelta
-from emoji import emoji_lis, demojize
+import discord
+import emoji
+import re
+
+from collections import Counter
+from functools import reduce
 from urlmarker import URL_REGEX
 from urllib.parse import urlparse
-from collections import Counter
-import re
-import matplotlib.pyplot as plt
-import numpy
-import functools
 
-RE_CUSTOM_EMOJI = r'<a?(:[^\s:]+:)\d{1,20}>'
-# ^ Captures :cathug-3: from the string '<a:cathug-3:443111261899718658>'
 
 with open('swears.txt') as f:
-  SWEARS = f.read().lower().split('\n')
+  SWEARS = set(curse.lower().strip() for curse in f)
 
 with open('words.txt') as f:
-  WORDS = f.read().lower().split('\n')
+  WORDS = set(word.lower().strip() for word in f)
 
-def getemojis(string):
+def get_emojis(string):
+  RE_CUSTOM_EMOJI = r'<(a?)(:[A-Za-z0-9_]+:)([0-9]+)>'
   emojis = list()
-  for d in emoji_lis(string):
-    emojis.append(demojize(d['emoji']))
+  for e in emoji.emoji_lis(string):
+    emojis.append(e['emoji'])
   for e in re.findall(RE_CUSTOM_EMOJI, string):
-    emojis.append(e)
+    emojis.append(e[1])
   return emojis
+
+def get_links(string):
+  links = list()
+  for url in re.findall(URL_REGEX, string):
+    parsed = urlparse(url)
+    links.append('%s://%s' % (parsed.scheme, parsed.hostname))
+  return links
 
 class _MsgStatistics:
   def __init__(self):
     self.msgs = 0
     self.chars = 0
     self.words = 0
-    self.files = 0
     
     self.idlist = list()
     self.curses = Counter()
@@ -38,146 +42,94 @@ class _MsgStatistics:
     self.sites = Counter()
     self.pings = Counter()
     self.uniquewords = Counter()
-    
-    self.hourslots = {h:0 for h in range(24)}
-    self.monthslots = dict()
-    
+
+    self.hourslots = Counter({h:0 for h in range(24)})
+    self.monthslots = Counter()
+
   @property
   def curseratio(self):
     return float('%.3f' % (sum(self.curses.values()) / self.msgs))
+  
   @property
   def charratio(self):
     return float('%.2f' % (self.chars / self.msgs))
+  
   @property
   def wordratio(self):
     return float('%.2f' % (self.words / self.msgs))
   
-  def feed(self, message):
-    # Check if message is a duplicate
-    if message.id in self.idlist:
-      raise ValueError("Message has already been logged")
-    self.msgs += 1
-    self.idlist.append(message.id)
-    
-    # Unique Words
-    for word in message.content.lower().split():
-      if not word in WORDS and word.isalnum() and word[0].isalpha():
-        self.uniquewords[word] += 1
+  @property
+  def earliest_message_id(self):
+    return sorted(self.idlist)[0] if self.idlist else 0 # ids get sorted by timestamp 
 
-    # Cursing
+  @property
+  def latest_message_id(self):
+    return sorted(self.idlist)[-1] if self.idlist else 0
+  
+  def feed(self, message: discord.Message):
+    assert message.id not in self.idlist, 'Message has already been logged: %s' % message.id
+
+    self.idlist.append(message.id)
+    self.msgs += 1
+
+    # Curses and Unique Words
     for word in message.content.lower().split():
-      if word in SWEARS:
-        self.curses[word] += 1
-      
+      if word.isalnum() and word[0].isalpha():
+        if word not in WORDS:
+          self.uniquewords[word] += 1
+        if word in SWEARS:
+          self.curses[word] += 1
+  
     # Mentions (Pings)
     for user in message.mentions:
       self.pings[user.name] += 1
-      
+
     # Character and Word count
-    self.chars += len(message.content) # NOTE: CUSTOM EMOJIS AFFECT CHAR COUNT?
+    self.chars += len(message.content)
     self.words += len(message.content.split())
-    
-    # Emojis
-    for e in getemojis(message.content):
+
+    # Emojis 
+    for e in get_emojis(message.content):
       self.emojis[e] += 1
-    # Links
-    for url in re.findall(URL_REGEX, message.content):
-      self.sites[urlparse(url).hostname] += 1
-    # Times
-    self.hourslots[(message.created_at - timedelta(hours=7)).hour] += 1 # -7 is PST
     
-  def hourgraph(self, fname='bar.png', label='Messages', show=0):
-    plt.clf()
-    y_pos = numpy.arange(len(self.hourslots))
-    plt.bar(y_pos, list(self.hourslots.values()), align='center', alpha=0.5)
-    plt.xticks(y_pos, list(self.hourslots))
-    plt.ylabel(label)
-    plt.title('Messages per Daytime Hour (PST)')
-    if show:
-      plt.show()
-    else:
-      plt.savefig(fname)
-      
-  def display_info(self):
-    frmt = lambda attr, num: ', '.join(list(map(lambda tup: tup[0], attr.most_common(num))))
-    display = f'''{self.msgs} messages
-{self.words} words ({self.wordratio} words per message)
-{self.chars} characters ({self.charratio} characters per message)
-Top three emojis: {frmt(self.emojis, 3)}
-Top three pinged users: {frmt(self.pings, 3)}
-Top three most linked-to websites: {frmt(self.sites, 3)}
-Top five unique words: {frmt(self.uniquewords, 5)}
-Top five curses: {frmt(self.curses, 5)} ({self.curseratio} curses per message)
-'''
-    return display
-  
+    # Links
+    for url in get_links(message.content):
+      self.sites[url] += 1
+    
+    # Times
+    self.hourslots[message.created_at.hour] += 1
+    self.monthslots[message.created_at.date().isoformat()] += 1
+
 class UserStatistics(_MsgStatistics):
-  def __init__(self, user):
+  def __init__(self, user: discord.User):
     super().__init__()
     self.id = user.id
     self.name = user.name
     self.discrim = user.discriminator
     
   def __repr__(self):
-    return self.name
-  
-  def hourgraph(self, show=0):
-    super().hourgraph(f'{self.name}bar.png', f'{self.name}\'s Messages', show)
-    
-  def display_info(self):
-    display = 'Statistics for user: %s \n' % self.name
-    display += super().display_info()
-    return display
-    
+    return '%s#%s' % (self.name, self.discrim)
+
 class ChannelStatistics(_MsgStatistics):
-  def __init__(self, channame, chanid):
-    super().__init__()
-    self.name = channame
-    self.id = chanid
+  def __init__(self, channel: discord.TextChannel):
+    self.name = channel.name
+    self.id = channel.id
     self.userlist = list()
-    
+
   def __repr__(self):
-    return self.name
+    return f'<ChannelStatistics id={self.id}, msgs={self.msgs}, name=\'#{self.name}\', userlist={self.userlist}>'
   
-  def __getattribute__(self, name):
-    '''
-Whenever the class returns a statistic attribute, it does so by taking every UserStatistics \
-object in the class and summing all of their values for that attribute, rather than consistently storing the values.
-This is done to reduce memory use.
-    '''
-    if name in ['msgs', 'curses', 'words', 'chars', 'emojis', 'pings', 'uniquewords', 'sites', 'idlist']:
-      return functools.reduce(lambda a, b: a + b, [getattr(obj, name) for obj in self.userlist])
-    else:
-      return object.__getattribute__(self, name)
-    
-  def get_user(self, username, discrim=None):
-    users = [u for u in self.userlist if u.name == username]
-    if discrim:
-      return next(u for u in users if u.discrim == discrim)
-    return next(iter(users))
-  
-  def get_user_by_id(self, userid):
-    return [u for u in self.userlist if u.id == userid][0] # NOTE: make this not as shitty
-  
-  def get_users_by_activity(self):
-    return sorted(self.userlist, key=lambda u: u.msgs, reverse=True)
-  
-  def get_users_by_wordratio(self):
-    return sorted(self.userlist, key=lambda u: u.wordratio)
-  
-  def feed(self, message):
+  def __getattr__(self, attr):
+    if attr in _MsgStatistics().__dict__:
+      return reduce(lambda a, b: a + b, [getattr(obj, attr) for obj in self.userlist], getattr(_MsgStatistics(), attr))
+
+  def feed(self, message: discord.Message):
     for user in self.userlist:
       if user.id == message.author.id:
         user.feed(message)
         break
-    else: #for-else construct is intentional
+    else:
       user = UserStatistics(message.author)
       user.feed(message)
       self.userlist.append(user)
-      
-  def display_info(self):
-    display = 'Statistics for channel: #%s \n' % self.name
-    display += 'Most Active Users: %s (%s in total)\n' % (', '.join([repr(obj) for obj in self.get_users_by_activity()[:25]]) + ('. . .' if len(self.userlist) >= 25 else ''), len(self.userlist))
-    display += super().display_info()
-    return display
       
