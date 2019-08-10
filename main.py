@@ -1,13 +1,17 @@
 import discord
 import asyncio
-import typing
 from discord.ext import commands
 
 description = '''A very sexy discord bot that scrapes messages from discord channels and returns statistics/graphs, among other things'''
 bot = commands.Bot(command_prefix='!', description=description)
-
 bot.load_extension('cogs.kym')
-bot.load_extension('cogs.statscollections')
+bot.load_extension('cogs.stats')
+
+@bot.event
+async def on_ready():
+  print('Logged in as %s' % bot.user.name)
+  print(bot.user.id)
+  print('------')
 
 @bot.command()
 async def ayy(ctx):
@@ -26,4 +30,4 @@ async def quit(ctx):
   await bot.logout()
 
 if __name__ == '__main__':
-  bot.run('token', reconnect=False)
+  bot.run('token')
