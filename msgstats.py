@@ -1,12 +1,15 @@
 import discord
-import emoji
+import os
+import json
 import re
+import emoji
 
 from collections import Counter
 from functools import reduce
 from urlmarker import URL_REGEX
 from urllib.parse import urlparse
 
+JSON_FOLDER = 'DiscordStatistics'
 
 with open('swears.txt') as f:
   SWEARS = set(curse.lower().strip() for curse in f)
@@ -106,7 +109,7 @@ class UserStatistics(_MsgStatistics):
     self.id = user.id
     self.name = user.name
     self.discrim = user.discriminator
-    
+    self.icon = str(user.avatar_url_as(static_format='png'))    
   def __repr__(self):
     return '%s#%s' % (self.name, self.discrim)
 
@@ -114,22 +117,52 @@ class ChannelStatistics(_MsgStatistics):
   def __init__(self, channel: discord.TextChannel):
     self.name = channel.name
     self.id = channel.id
-    self.userlist = list()
+    self.userlist = [UserStatistics(member) for member in channel.members]
 
   def __repr__(self):
-    return f'<ChannelStatistics id={self.id}, msgs={self.msgs}, name=\'#{self.name}\', userlist={self.userlist}>'
+    userstr = self.userlist if len(self.userlist) <= 25 else str(self.userlist[:25]) + '. . . '
+    return f'<ChannelStatistics id={self.id}, msgs={self.msgs}, name=\'#{self.name}\', userlist={userstr}>'
   
   def __getattr__(self, attr):
-    if attr in _MsgStatistics().__dict__:
-      return reduce(lambda a, b: a + b, [getattr(obj, attr) for obj in self.userlist], getattr(_MsgStatistics(), attr))
-
-  def feed(self, message: discord.Message):
+    return sum((getattr(obj, attr) for obj in self.userlist), getattr(_MsgStatistics(), attr))
+  
+  def get_user_by_id(self, userid) -> UserStatistics:
     for user in self.userlist:
-      if user.id == message.author.id:
-        user.feed(message)
-        break
+      if user.id == userid:
+        return user
     else:
-      user = UserStatistics(message.author)
-      user.feed(message)
-      self.userlist.append(user)
-      
+      raise LookupError('Couldn\'t find user')
+    
+  def feed(self, message: discord.Message):
+    self.get_user_by_id(message.author.id).feed(message)
+    
+class GuildStatistics(_MsgStatistics):
+  '''This class creates json files storing info on itself.'''
+  def __init__(self, guild: discord.Guild):
+    self.name = guild.name
+    self.id = guild.id
+    self.chanlist = [ChannelStatistics(channel) for channel in guild.text_channels \
+                        if channel.permissions_for(guild.me).read_message_history]
+  def __repr__(self):
+    return f'<GuildStatistics id={self.id}, name=\'#{self.name}\', chanlist={[channel.name for channel in self.chanlist]}>'
+  
+  def __getattr__(self, attr):
+    return sum((getattr(obj, attr) for obj in self.chanlist), getattr(_MsgStatistics(), attr))
+  
+  def get_channel_by_id(self, channelid) -> ChannelStatistics:
+    for channel in self.chanlist:
+      if channel.id == channelid:
+        return channel
+    else:
+      raise LookupError('Couldn\'t find channel')
+    
+  def feed(self, message: discord.Message):
+    self.get_channel_by_id(message.channel.id).feed(message)
+    
+  def json_upload(self, folder=JSON_FOLDER):
+    path = f'{folder}/{self.name}/guildstats.json'
+    if not os.path.exists(path):
+      os.mkdir(f'{folder}/{self.name}')
+    
+    with open(path, 'w') as file:
+      json.dump(self, file, default=lambda obj: {obj.__class__.__name__: obj.__dict__})
